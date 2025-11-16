@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom monospace console look */
+:root{
+  --bg-1: #071021;
+  --bg-2: #071827;
+  --panel: #0b1220;
+  --muted: #9aa4b2;
+  --accent: #06b6d4;
+}
+html,body,#root{height:100%}
+body{
+  @apply bg-gradient-to-b from-[#071021] to-[#071827] text-[#e6eef6] font-mono;
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  padding:1rem;
+}
+.container{max-width:1100px;margin:0 auto}
+.ascii-border{border:2px solid rgba(255,255,255,0.06);padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01))}
+.small{font-size:.95rem;color:var(--muted)}
+.status-red{color:#ef4444}
+.status-yellow{color:#f59e0b}
+.status-green{color:#10b981}
+.console-table th{color:var(--muted);font-weight:600;text-align:left;padding:8px}
+.console-table td{padding:8px;border-top:1px solid rgba(255,255,255,0.02)}
+.btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:6px 10px;border-radius:6px}
+.btn-primary{background:linear-gradient(90deg,#06b6d4,#3b82f6);color:#fff;border:0}

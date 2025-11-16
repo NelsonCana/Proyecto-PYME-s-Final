@@ -1,0 +1,5 @@
+company_name: "PYMESec Demo"
+targets:
+  - host: "example.com"
+    web_url: "https://example.com"
+    ports: [80, 443, 22, 25]

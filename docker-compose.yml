@@ -1,0 +1,50 @@
+version: "3.8"
+services:
+  postgres:
+    image: postgres:16
+    container_name: pymesec_postgres
+    environment:
+      POSTGRES_DB: pymesec
+      POSTGRES_USER: pymesec_user
+      POSTGRES_PASSWORD: pymesec_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    #Port Inhabilitado por  ahora
+    #ports:
+    # - "5432:5432"
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      COMPANY_PROFILE: ${COMPANY_PROFILE}
+    ports:
+      - "50000:8000"
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app # Monta el código actual para desarrollo
+      - ./config:/app/config:ro
+      - ./reports:/app/reports
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    # ESTA LÍNEA CAMBIA:
+    # CORRECTO
+    command: ["python", "-m", "job.main"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      COMPANY_PROFILE: ${COMPANY_PROFILE}
+      SCAN_INTERVAL_MIN: ${SCAN_INTERVAL_MIN}
+    depends_on:
+      - postgres
+    volumes:
+      - ./config:/app/config:ro
+      - ./reports:/app/reports
+
+volumes:
+  pgdata:
