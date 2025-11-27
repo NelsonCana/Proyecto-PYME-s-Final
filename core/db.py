@@ -42,16 +42,14 @@ class ScanResult(Base):
     __tablename__ = "scan_results"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+    host = Column(String) 	
     # 🔗 NUEVO: Clave foránea para vincular el resultado al usuario
-    owner_id = Column(Integer, ForeignKey("users.id")) 
-    
-    host = Column(String, index=True)
     scan_time = Column(DateTime(timezone=True), server_default=func.now())
-    status = Column(String) # ⚠️ NUEVO: Necesario para el Dashboard (Running, Completed, Error)
-    results = Column(JSON) 
+    status = Column(String, default="pending") # ⚠️ NUEVO: Necesario para el Dashboard (Running, Completed, Error)
+    results = Column(JSON)
 
     # Relación: Un resultado pertenece a un usuario
+    user_id = Column(Integer, ForeignKey("users.id"))
     owner = relationship("User", back_populates="scan_results")
 
 

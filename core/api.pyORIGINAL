@@ -1,0 +1,234 @@
+# pymesec/core/api.py
+
+from fastapi import FastAPI, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Header
+from fastapi.middleware.cors import CORSMiddleware
+from typing import List, Dict, Any, Optional
+from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel, EmailStr
+from datetime import datetime
+import asyncio
+import json
+import yaml
+import os
+from passlib.context import CryptContext
+
+# Importamos la configuración de BD y Modelos
+from .db import get_db, init_db, ScanResult as DBScanResult, User as DBUser
+
+# --- CONFIGURACIÓN PRINCIPAL ---
+app = FastAPI(title="PYMESec Security Evaluator API")
+
+# Hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# --- CORS ---
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://localhost:80",
+    "http://localhost:50000",
+    "http://190.97.169.237:50000",
+    "http://190.97.169.237:50001",
+    "*" # Permitir todo temporalmente para facilitar pruebas
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- SCHEMAS (Modelos) ---
+class UserSchema(BaseModel):
+    id: int
+    name: str
+    email: EmailStr
+    company_name: str
+    class Config:
+        from_attributes = True
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class RegisterRequest(LoginRequest):
+    name: str
+    companyName: str
+
+class ConfigUpdate(BaseModel):
+    sector: str
+    network_size: int
+    main_server_ip: Optional[str] = None
+
+class ScanParams(BaseModel):
+    ip_range: str
+    scan_type: str
+
+class ScanResultResponse(BaseModel):
+    id: int
+    host: Optional[str] = None
+    scan_time: Optional[datetime] = None
+    status: str
+    results: Dict[str, Any]
+    class Config:
+        from_attributes = True
+
+# --- UTILERÍAS ---
+def verify_password(plain_password, hashed_password):
+    return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
+
+active_connections: Dict[int, WebSocket] = {}
+
+async def push_scan_status(user_id: int, status_data: Dict[str, Any]):
+    websocket = active_connections.get(user_id)
+    if websocket:
+        try:
+            await websocket.send_json(status_data)
+        except Exception:
+            pass
+
+async def run_scan_in_background(user_id: int, scan_id: int, params: ScanParams, db: Session):
+    """Simulación de escaneo para actualizar la UI"""
+    await push_scan_status(user_id, {'status': 'Running', 'message': 'Iniciando escáneres...', 'scanId': scan_id})
+    await asyncio.sleep(2)
+    
+    # Simulamos hallazgos
+    await push_scan_status(user_id, {'status': 'Running', 'message': 'Analizando puertos...', 'scanId': scan_id})
+    await asyncio.sleep(2)
+    
+    # Actualizar BD a completado
+    # (Aquí iría la lógica real de nmap/scanners)
+    
+    await push_scan_status(user_id, {'status': 'Completed', 'message': 'Escaneo finalizado.', 'scanId': scan_id})
+
+
+# --- EVENTO DE INICIO ---
+@app.on_event("startup")
+def startup_event():
+    print("Iniciando API de PYMESec...")
+    init_db()
+    print("Base de datos inicializada.")
+
+# ==========================================
+# RUTAS DE LA API (Con prefijo /api/v1)
+# ==========================================
+
+# 1. AUTH
+@app.post("/api/v1/auth/register")
+async def register_user(request: RegisterRequest, db: Session = Depends(get_db)):
+    db_user = db.query(DBUser).filter(DBUser.email == request.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="El email ya está registrado.")
+    
+    new_user = DBUser(
+        name=request.name,
+        email=request.email,
+        hashed_password=get_password_hash(request.password),
+        company_name=request.companyName
+    )
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Error al registrar.")
+    
+    return {"message": "Usuario registrado exitosamente."}
+
+@app.post("/api/v1/auth/login")
+async def login_user(request: LoginRequest, db: Session = Depends(get_db)):
+    db_user = db.query(DBUser).filter(DBUser.email == request.email).first()
+    if not db_user or not verify_password(request.password, db_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Credenciales inválidas.")
+    
+    user_data = UserSchema.model_validate(db_user)
+    return {"token": f"fake_jwt_token_{db_user.id}", "user": user_data.model_dump()}
+
+#usuario
+@app.get("/api/v1/user/me", response_model=UserSchema)
+async def get_my_profile(authorization: str = Header(None), db: Session = Depends(get_db)):
+    """Recupera el usuario basado en el token simulado"""
+    if not authorization:
+         raise HTTPException(status_code=401, detail="Token no proporcionado")
+
+    try:
+        # El frontend envía: "Bearer fake_jwt_token_{id}"
+        # Extraemos el token
+        token_parts = authorization.split(" ")
+        if len(token_parts) != 2:
+            raise ValueError("Formato de token inválido")
+
+        token = token_parts[1]
+
+        # Extraemos el ID del usuario del string del token
+        # Formato del token: fake_jwt_token_1
+        user_id = int(token.split("_")[-1])
+
+        user = db.query(DBUser).filter(DBUser.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+
+        return user
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+
+# 2. EVALUATION (Dashboard y Escaneos)
+@app.get("/api/v1/evaluation/history", response_model=List[ScanResultResponse])
+def get_scan_history(db: Session = Depends(get_db)):
+    # Devuelve el historial para el Dashboard
+    return db.query(DBScanResult).order_by(DBScanResult.scan_time.desc()).limit(50).all()
+
+@app.post("/api/v1/evaluation/start")
+async def start_scan(params: ScanParams, db: Session = Depends(get_db)):
+    # Crear registro inicial en BD
+    # Nota: Asumimos usuario ID 1 temporalmente si no hay token real descifrado
+    new_scan = DBScanResult(status="Pending", results={}, user_id=1) 
+    db.add(new_scan)
+    db.commit()
+    db.refresh(new_scan)
+    
+    # Iniciar tarea en background
+    asyncio.create_task(run_scan_in_background(1, new_scan.id, params, db))
+    
+    return {"message": "Escaneo iniciado", "scanId": new_scan.id}
+
+# 3. CONFIG (Objetivos)
+@app.get("/api/v1/config/company")
+def get_company_config():
+    # Simulación de lectura de archivo
+    return {"sector": "tecnologia", "network_size": 10, "main_server_ip": "127.0.0.1"}
+
+@app.post("/api/v1/config/company")
+def update_company_config(config: ConfigUpdate):
+    return {"message": "Configuración guardada"}
+
+# 4. RESULTS (Reportes)
+@app.get("/api/v1/results/{host}", response_model=List[ScanResultResponse])
+def get_host_results(host: str, db: Session = Depends(get_db)):
+    return db.query(DBScanResult).filter(DBScanResult.host == host).all()
+
+@app.get("/api/v1/scan/{scan_id}", response_model=ScanResultResponse)
+def get_scan_detail(scan_id: int, db: Session = Depends(get_db)):
+    result = db.query(DBScanResult).filter(DBScanResult.id == scan_id).first()
+    if not result:
+        raise HTTPException(status_code=404, detail="Escaneo no encontrado")
+    return result
+
+# 5. WEBSOCKET
+@app.websocket("/ws/status/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: int):
+    await websocket.accept()
+    active_connections[user_id] = websocket
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        del active_connections[user_id]
