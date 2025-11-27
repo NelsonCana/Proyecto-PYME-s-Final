@@ -43,7 +43,7 @@ export const ToastProvider = ({ children }) => {
       <div className={`${baseClasses} ${typeClasses} translate-y-0`}>
         <div className="flex justify-between items-center">
           <span className="font-semibold">{toast.message}</span>
-          <button onClick={onClose} className="ml-4 text-white hover:text-gray-200 font-bold">
+          <button onClick={closeToast} className="ml-4 text-white hover:text-gray-200 font-bold">
             &times;
           </button>
         </div>

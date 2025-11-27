@@ -4,6 +4,7 @@ import reportService from '../services/reportService';
 import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
+// Registrar componentes de Chart.js para evitar errores de "blue screen"
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 const VulnerabilityDetailModal = ({ vulnerability, onClose }) => {
@@ -40,10 +41,11 @@ function Report() {
     const fetchReport = async () => {
       try {
         const data = await reportService.getReportDetail(id);
+        console.log("Datos recibidos en Reporte:", data); // <--- LOG PARA DEPURAR
         setReportData(data);
       } catch (err) {
         console.error(err);
-        setError("No se pudo cargar el reporte.");
+        setError("No se pudo cargar el reporte. Intente nuevamente.");
       } finally {
         setLoading(false);
       }
@@ -51,15 +53,11 @@ function Report() {
     fetchReport();
   }, [id]);
 
-  // Función para descargar
-  const handleDownload = () => {
-    reportService.downloadReport(id, 'pdf');
-  };
-
   if (loading) return <div className="p-10 text-center text-white">Cargando análisis...</div>;
   if (error) return <div className="p-10 text-center text-red-400">{error}</div>;
   if (!reportData) return <div className="p-10 text-center text-gray-400">Reporte no encontrado.</div>;
 
+  // Preparar datos para el gráfico (con valores por defecto segurizados)
   const vulns = reportData.vulnerabilities || [];
   const counts = { Critica: 0, Alta: 0, Media: 0, Baja: 0 };
   
@@ -76,32 +74,23 @@ function Report() {
     }]
   };
 
+  // Calcular riesgo (simulado basado en cantidad)
   const riskScore = Math.min(10, (counts.Critica * 3 + counts.Alta * 2 + counts.Media * 0.5)).toFixed(1);
 
   return (
     <div className="p-6 max-w-7xl mx-auto text-gray-200">
-      {/* ENCABEZADO CON BOTÓN */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 border-b border-gray-700 pb-4 gap-4">
+      <div className="flex justify-between items-end mb-6 border-b border-gray-700 pb-4">
         <div>
           <h1 className="text-3xl font-bold text-white">Reporte de Seguridad #{reportData.reportId}</h1>
           <p className="text-gray-400 mt-1">Objetivo: <span className="text-blue-400 font-mono">{reportData.host}</span></p>
         </div>
-        
-        <div className="flex items-center gap-4">
+        <div className="text-right">
             <span className="text-sm text-gray-500">Fecha: {new Date(reportData.date).toLocaleDateString()}</span>
-            
-            {/* --- AQUÍ ESTÁ EL BOTÓN NUEVO --- */}
-            <button 
-                onClick={handleDownload}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded flex items-center gap-2 transition-colors"
-            >
-                <span>📄 Descargar PDF</span>
-            </button>
         </div>
       </div>
 
-      {/* PANELES (Igual que antes) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {/* Panel de Riesgo */}
         <div className="bg-[#0b1220] p-6 rounded-lg border border-gray-800 flex flex-col items-center justify-center">
             <h2 className="text-gray-400 text-sm uppercase tracking-wider mb-2">Puntuación de Riesgo</h2>
             <div className="text-5xl font-bold text-white mb-2">{riskScore}/10</div>
@@ -110,6 +99,7 @@ function Report() {
             </span>
         </div>
 
+        {/* Gráfico */}
         <div className="bg-[#0b1220] p-6 rounded-lg border border-gray-800 flex flex-col items-center">
             <h2 className="text-gray-400 text-sm uppercase tracking-wider mb-4">Distribución</h2>
             <div className="w-48 h-48">
@@ -121,6 +111,7 @@ function Report() {
             </div>
         </div>
 
+        {/* Resumen */}
         <div className="bg-[#0b1220] p-6 rounded-lg border border-gray-800">
             <h2 className="text-gray-400 text-sm uppercase tracking-wider mb-4">Resumen de Hallazgos</h2>
             <div className="space-y-3">
@@ -132,7 +123,7 @@ function Report() {
         </div>
       </div>
 
-      {/* TABLA (Igual que antes) */}
+      {/* Tabla de Detalles */}
       <div className="bg-[#0b1220] rounded-lg border border-gray-800 overflow-hidden">
         <div className="p-4 bg-gray-900 border-b border-gray-800">
             <h3 className="font-bold text-white">Detalle Técnico</h3>

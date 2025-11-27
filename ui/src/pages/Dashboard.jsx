@@ -1,11 +1,11 @@
-// src/pages/Dashboard.jsx (Actualizado)
+// src/pages/Dashboard.jsx
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import evaluationService from '../services/evaluationService'; // Aún lo usamos para el Historial
+import evaluationService from '../services/evaluationService';
 import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/UI/Spinner';
-import { useSocket } from '../contexts/SocketContext'; // <-- IMPORTAR EL SOCKET
+import { useSocket } from '../contexts/SocketContext';
 
 function Dashboard() {
   const [currentStatus, setCurrentStatus] = useState({ 
@@ -17,81 +17,160 @@ function Dashboard() {
   
   const { showToast } = useToast();
   const navigate = useNavigate();
-  const socket = useSocket(); // <-- Obtener el socket del contexto
+  const socket = useSocket();
 
-  // ===============================================
-  // LÓGICA DE CARGA INICIAL (SOLO HISTORIAL)
-  // ===============================================
-
+  // 1. Carga inicial del historial
   useEffect(() => {
-    // Cargar solo el historial la primera vez
     const fetchHistory = async () => {
       try {
         const historyData = await evaluationService.getHistory();
         setHistory(Array.isArray(historyData) ? historyData : []); 
       } catch (error) {
-        showToast('Fallo al cargar el historial de evaluaciones.', 'error');
+        console.error("Error cargando historial:", error);
       } finally {
         setLoading(false);
       }
     };
-    
     fetchHistory();
   }, []);
 
-  // ===============================================
-  // LÓGICA DE WEBSOCKET (REEMPLAZA AL POLLING)
-  // ===============================================
-  
+  // 2. Escuchar WebSocket (Versión Nativa Correcta)
   useEffect(() => {
     if (socket) {
-      // 1. Limpiar listeners antiguos (buena práctica)
-      socket.off('scan_status');
-      socket.off('connection_success');
+      // Definir qué hacer cuando llega un mensaje
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          console.log("WS Recibido:", data);
+          
+          // Actualizar el estado en pantalla
+          setCurrentStatus(data);
 
-      // 2. Escuchar evento de conexión
-      socket.on('connection_success', (data) => {
-        setCurrentStatus({ status: 'Idle', message: data.message });
-      });
-
-      // 3. Escuchar actualizaciones de estado del escaneo
-      socket.on('scan_status', (data) => {
-        // data = { status: 'Running', message: '...', scanId: '...' }
-        setCurrentStatus(data);
-
-        // Si el escaneo se completa, refrescar el historial
-        if (data.status === 'Completed') {
-          showToast('¡Escaneo completado!', 'success');
-          // Recargar el historial para que aparezca la nueva entrada
-          evaluationService.getHistory()
-            .then(historyData => setHistory(Array.isArray(historyData) ? historyData : []));
+          // Si termina, avisar y actualizar la tabla
+          if (data.status === 'Completed') {
+            showToast('¡Escaneo completado!', 'success');
+            evaluationService.getHistory()
+              .then(h => setHistory(Array.isArray(h) ? h : []));
+          }
+        } catch (e) {
+          console.error("Error al procesar mensaje WS:", e);
         }
-      });
-
-      // 4. Limpiar al desmontar
-      return () => {
-        socket.off('scan_status');
-        socket.off('connection_success');
       };
     }
-  }, [socket, showToast]); // Re-ejecutar si el socket cambia
+  }, [socket, showToast]);
 
-  // ... (El resto de tu componente Dashboard: statusColor, handleViewReport, etc.) ...
-  
-  // RENDERIZADO (El JSX sigue igual, solo cambia el if(loading))
+  // Helpers visuales
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Running': return 'text-blue-400 animate-pulse';
+      case 'Completed': return 'text-green-400';
+      case 'Error': return 'text-red-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  const handleViewReport = (id) => {
+    navigate(`/report/${id}`);
+  };
 
   if (loading) {
     return (
         <div className="flex justify-center items-center min-h-[80vh] flex-col">
             <Spinner size="lg" color="blue" />
-            <p className="ml-3 text-lg text-gray-700 mt-4">Cargando Historial...</p>
+            <p className="ml-3 text-lg text-gray-700 mt-4">Cargando Dashboard...</p>
         </div>
     );
   }
 
-  // ... (Tu JSX de Dashboard.jsx) ...
-  // El componente <div className="p-6 mb-8 ..."> (Estado Actual)
-  // ahora se actualizará en tiempo real basado en el estado 'currentStatus'.
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      <h1 className="text-3xl font-bold mb-2 text-white">Dashboard de Seguridad</h1>
+      <p className="text-gray-400 mb-8">Monitoreo en tiempo real y gestión de evaluaciones.</p>
+
+      {/* Tarjeta de Estado Actual */}
+      <div className="ascii-border bg-[#0b1220] p-6 mb-8 rounded-lg shadow-lg">
+        <h2 className="text-xl font-semibold text-gray-300 mb-4 border-b border-gray-700 pb-2">
+          Estado del Escáner
+        </h2>
+        <div className="flex items-center space-x-4">
+          <div className={`text-4xl ${getStatusColor(currentStatus.status)}`}>
+            ●
+          </div>
+          <div>
+            <p className="text-lg font-medium text-white">
+              {currentStatus.status === 'Idle' ? 'Inactivo' : currentStatus.status}
+            </p>
+            <p className="text-gray-400 font-mono mt-1">
+              {currentStatus.message || "Sistema listo para operar."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla de Historial */}
+      <div className="ascii-border bg-[#0b1220] p-6 rounded-lg">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-gray-300">Historial de Evaluaciones</h2>
+          <button 
+            onClick={() => navigate('/objectives')}
+            className="btn-primary px-4 py-2 rounded hover:opacity-90 transition"
+          >
+            Nueva Evaluación
+          </button>
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full console-table text-left text-gray-300">
+            <thead>
+              <tr className="border-b border-gray-700 text-gray-500">
+                <th className="pb-2">ID</th>
+                <th className="pb-2">Fecha</th>
+                <th className="pb-2">Objetivo</th>
+                <th className="pb-2">Estado</th>
+                <th className="pb-2">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              {history.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-8 text-gray-500">
+                    No hay evaluaciones registradas.
+                  </td>
+                </tr>
+              ) : (
+                history.map((scan) => (
+                  <tr key={scan.id} className="border-t border-gray-800 hover:bg-gray-800/50 transition">
+                    <td className="py-3 font-mono text-sm">#{scan.id}</td>
+                    <td className="py-3 text-sm">
+                      {new Date(scan.scan_time).toLocaleString()}
+                    </td>
+                    <td className="py-3 text-sm font-medium text-white">
+                      {scan.host || 'N/A'}
+                    </td>
+                    <td className="py-3">
+                      <span className={`px-2 py-1 rounded text-xs font-bold 
+                        ${scan.status === 'Completed' ? 'bg-green-900 text-green-300' : 
+                          scan.status === 'Error' ? 'bg-red-900 text-red-300' : 'bg-blue-900 text-blue-300'}`}>
+                        {scan.status}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <button 
+                        onClick={() => handleViewReport(scan.id)}
+                        className="text-cyan-400 hover:text-cyan-300 hover:underline text-sm"
+                      >
+                        Ver Reporte
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default Dashboard;

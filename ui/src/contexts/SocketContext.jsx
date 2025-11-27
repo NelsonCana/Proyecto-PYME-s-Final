@@ -1,37 +1,30 @@
-// src/contexts/SocketContext.jsx
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import io from 'socket.io-client';
-import { useAuth } from './AuthContext'; // Para obtener el user_id
+import { useAuth } from './AuthContext';
 
 const SocketContext = createContext();
 
 export const useSocket = () => useContext(SocketContext);
 
-// ⬇️ Cambia esta URL por la de tu backend de Python
-const SOCKET_SERVER_URL = 'http://localhost:8000'; 
-
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
-  const { user, isLoggedIn } = useAuth(); // Obtenemos el usuario
+  const { user, isLoggedIn } = useAuth();
 
   useEffect(() => {
     if (isLoggedIn && user) {
-      // 1. Conectar al servidor
-      const newSocket = io(SOCKET_SERVER_URL);
-      setSocket(newSocket);
+      // Detectar automáticamente la URL del WebSocket (ws://IP:50000/ws/status/ID)
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host; // Obtiene '190.97...:50000'
+      const wsUrl = `${protocol}//${host}/ws/status/${user.id}`;
 
-      // 2. Unirse a la sala privada basada en el ID del usuario
-      newSocket.emit('join_room', { user_id: user.id }); // Asumiendo que user.id existe
+      console.log("Conectando WS a:", wsUrl);
+      const ws = new WebSocket(wsUrl);
 
-      // 3. Limpieza: Desconectar al salir
-      return () => newSocket.close();
-    } else {
-      // Si no está logueado, asegurarse de que no haya socket
-      if (socket) {
-        socket.close();
-        setSocket(null);
-      }
+      ws.onopen = () => console.log("WebSocket Conectado ✅");
+      ws.onclose = () => console.log("WebSocket Desconectado ❌");
+
+      setSocket(ws);
+
+      return () => ws.close();
     }
   }, [isLoggedIn, user]);
 

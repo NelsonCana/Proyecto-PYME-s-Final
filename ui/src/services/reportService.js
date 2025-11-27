@@ -1,134 +1,94 @@
-// src/services/reportService.js
-
-import fetchApi from './apiClient'; // Asume que este archivo existe y maneja la URL/Token
-
-// -----------------------------------------------------------------
-// DATOS DE SIMULACIÓN para que Report.jsx funcione inmediatamente
-// Su backend de Python debería devolver datos con esta estructura
-// -----------------------------------------------------------------
-const MOCK_REPORT_DATA = {
-    reportId: 'REP-2025-001',
-    companyName: 'Innovaciones PYMESec S.A.',
-    date: '2025-10-27T10:00:00Z',
-    score: 6.8, // Puntuación de riesgo global
-    vulnerabilities: [
-        {
-            id: 'VULN-001',
-            name: 'Puerto 21 (FTP) Abierto y Anónimo',
-            severity: 'Critica',
-            host: '192.168.1.10',
-            description: 'El servidor FTP permite conexiones anónimas, exponiendo archivos sensibles.',
-            impact_pyme: 'Riesgo directo de robo de información y compromiso del sistema.',
-            mitigation_steps: ['Cerrar el puerto 21 al exterior.', 'Deshabilitar el acceso anónimo.', 'Usar SFTP o FTPS.'],
-        },
-        {
-            id: 'VULN-002',
-            name: 'Versión Antigua de Servidor Web (Apache 2.2)',
-            severity: 'Alta',
-            host: '192.168.1.15',
-            description: 'Versión desactualizada de Apache con múltiples vulnerabilidades conocidas (CVEs).',
-            impact_pyme: 'Un atacante puede tomar control del servidor web explotando debilidades públicas.',
-            mitigation_steps: ['Actualizar el servidor Apache a la última versión estable (2.4 o superior).', 'Aplicar parches de seguridad.'],
-        },
-        {
-            id: 'VULN-003',
-            name: 'Falta de Headers de Seguridad HTTP',
-            severity: 'Media',
-            host: '192.168.1.15',
-            description: 'Ausencia de headers de seguridad (CSP) en la respuesta del servidor.',
-            impact_pyme: 'Aumenta el riesgo de ataques Cross-Site Scripting (XSS) y Clickjacking.',
-            mitigation_steps: ['Configurar headers X-Content-Type-Options y X-Frame-Options.', 'Implementar Content Security Policy (CSP).'],
-        },
-        {
-            id: 'VULN-004',
-            name: 'Configuración DNS Insegura',
-            severity: 'Baja',
-            host: '192.168.1.1',
-            description: 'El servidor DNS permite consultas recursivas externas.',
-            impact_pyme: 'Puede ser utilizado en ataques de amplificación de DDoS contra terceros.',
-            mitigation_steps: ['Deshabilitar consultas recursivas para IPs externas.'],
-        },
-        {
-            id: 'VULN-005',
-            name: 'Contraseña débil en dispositivo de red',
-            severity: 'Media',
-            host: '192.168.1.254',
-            description: 'Se detectó una contraseña simple en un dispositivo crítico de red.',
-            impact_pyme: 'Un atacante puede ganar acceso a la configuración de la red con un ataque de fuerza bruta simple.',
-            mitigation_steps: ['Cambiar la contraseña por una compleja (más de 12 caracteres, mayúsculas, minúsculas, símbolos).'],
-        },
-    ],
-};
-// -----------------------------------------------------------------
+import fetchApi from './apiClient';
 
 const reportService = {
   
-  // ===============================================
-  // 1. FUNCIONES DE REPORTE
-  // ===============================================
-
   /**
-   * Obtiene el detalle completo del reporte de una evaluación.
-   * Usamos MOCK_DATA por ahora para asegurar que Report.jsx renderice.
+   * Obtiene el detalle completo del reporte REAL desde la API.
    * @param {string} scanId - ID del reporte a obtener.
    */
   getReportDetail: async (scanId) => {
-    // Si su backend tiene este endpoint:
-    // return fetchApi(`/reports/${scanId}`);
+    // Validación: Si el ID no es válido o es 'latest' (no implementado), retornamos null
+    if (!scanId || scanId === 'latest') return null;
 
-    // Usamos MOCK DATA para desarrollo inmediato:
-    console.log(`[SIMULACIÓN API] Obteniendo reporte ${scanId || 'latest'}.`);
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simula latencia de red
-    return MOCK_REPORT_DATA;
+    try {
+      // 1. Llamada al endpoint real de la API (/api/v1/scan/{id})
+      const data = await fetchApi(`/scan/${scanId}`);
+      
+      // 2. Adaptamos la respuesta de la API al formato que el Frontend necesita
+      return {
+          reportId: data.id,
+          date: data.scan_time,
+          host: data.host,
+          status: data.status,
+          // Aquí extraemos las vulnerabilidades reales que generó Python
+          // Usamos '|| []' para asegurar que sea una lista y no rompa la pantalla si está vacío
+          vulnerabilities: data.results?.vulnerabilities || [],
+          
+          // Guardamos los datos crudos (puertos, headers) por si queremos usarlos luego
+          raw: data.results
+      };
+    } catch (error) {
+      console.error("Error obteniendo reporte:", error);
+      throw error; // Re-lanzamos el error para que la pantalla muestre el mensaje
+    }
   },
 
   /**
-   * Descarga el reporte en formato PDF/DOCX.
-   * @param {string} scanId - ID del reporte.
-   * @param {string} format - 'pdf' o 'docx'.
+   * Descarga el reporte (Simulado por ahora).
    */
-  downloadReport: async (scanId, format = 'pdf') => {
-    console.log(`[API REAL] Solicitando descarga del reporte ${scanId} en formato ${format}...`);
-    
-    // Su backend de Python debe estar configurado para devolver un archivo binario aquí.
-    const response = await fetchApi(`/reports/${scanId}/download?format=${format}`, {
-      method: 'GET',
-      // No manejamos el JSON en apiClient.js para esta llamada, manejamos el blob en el componente.
-      headers: {
-        'Accept': 'application/octet-stream', 
-      }
-    });
+  /**
+   * Descarga el reporte REAL en PDF generado por el backend.
+   */
+  downloadReport: async (scanId) => {
+    try {
+        // Obtenemos el token para la autenticación
+        const token = localStorage.getItem('authToken');
 
-    return response;
+        // Usamos fetch directo porque necesitamos manejar un BLOB (archivo binario)
+        // NOTA: Usamos el puerto 50000 (Nginx) que redirige a /api/
+        const response = await fetch(`/api/v1/reports/${scanId}/download`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+            },
+        });
+
+        if (!response.ok) throw new Error("Error generando el PDF");
+
+        // Convertimos la respuesta en un archivo descargable
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Reporte_PYMESec_${scanId}.pdf`; // Nombre del archivo
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+        console.error("Error descarga:", error);
+        alert("No se pudo descargar el reporte.");
+    }
   },
   
-  // ===============================================
-  // 2. FUNCIONES DE CONFIGURACIÓN (company.yaml)
-  // ===============================================
-
   /**
    * Obtiene la configuración actual de la PYME.
-   * Asume que su backend tiene un endpoint GET /api/config/company.
    */
   getConfig: async () => {
-    console.log('[API REAL] Obteniendo configuración de la PYME.');
-    // GET /api/config/company
     try {
-        return fetchApi('/config/company'); 
+        return await fetchApi('/config/company'); 
     } catch (error) {
-        // En caso de error, devuelve un objeto vacío para que el formulario no falle
-        return { sector: 'servicios', network_size: 10 };
+        // Valores por defecto seguros si falla la carga inicial
+        return { sector: 'tecnologia', network_size: 10 };
     }
   },
   
   /**
    * Actualiza la configuración de la PYME.
-   * Asume que su backend tiene un endpoint POST /api/config/company.
    */
   updateConfig: async (configData) => {
-    console.log('[API REAL] Actualizando configuración de la PYME:', configData);
-    // POST /api/config/company
-    return fetchApi('/config/company', {
+    return await fetchApi('/config/company', {
       method: 'POST',
       body: JSON.stringify(configData),
     });

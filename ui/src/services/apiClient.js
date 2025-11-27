@@ -1,48 +1,62 @@
 // src/services/apiClient.js
 
-// ⚠️ Cambiar esta URL base por la dirección de su backend (ej: http://127.0.0.1:5000)
-const API_BASE_URL = 'http://localhost:8000/api'; 
+// ⚠️ IMPORTANTE: Cambia 'localhost' por tu IP pública si accedes desde otro PC
+// En producción esto debería ser una variable de entorno.
+
+const API_HOST = '190.97.169.237'; // Tu IP actual
+const API_PORT = '50000';           // 50001 originalmente pero 50000 para pruebas  Puerto expuesto en docker-compose
+const API_VERSION = '/api/v1';     // Nueva ruta definida en api.py
+const API_BASE_URL = `http://${API_HOST}:${API_PORT}${API_VERSION}`;
+
+console.log(`[ApiClient] Conectando a: ${API_BASE_URL}`);
 
 /**
- * Función genérica para realizar llamadas a la API.
- * Añade automáticamente el token de autenticación.
+ * Función genérica para llamar a la API.
+ * Maneja tokens JWT y errores automáticamente.
  */
 async function fetchApi(endpoint, options = {}) {
   const token = localStorage.getItem('authToken');
+  
   const headers = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
 
   if (token) {
-    // ⬅️ Añade el token JWT en el encabezado para rutas protegidas
     headers['Authorization'] = `Bearer ${token}`; 
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  });
-
-  // Manejo básico de errores HTTP
-  if (!response.ok) {
-    let errorMessage = `Error en la API: ${response.statusText}`;
-    try {
-      const errorData = await response.json();
-      errorMessage = errorData.message || errorMessage;
-    } catch (e) {
-      // Ignora si no hay JSON en la respuesta de error
-    }
-    throw new Error(errorMessage);
-  }
-
-  // Si no hay contenido (ej. respuesta 204 No Content), devuelve null o true
-  if (response.status === 204) {
-    return true; 
-  }
+  // Aseguramos que el endpoint empiece con / si no lo tiene
+  const safeEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   
-  // Devuelve los datos JSON si existen
-  return response.json();
+  try {
+    const response = await fetch(`${API_BASE_URL}${safeEndpoint}`, {
+      ...options,
+      headers,
+    });
+
+    if (!response.ok) {
+      let errorMessage = `Error ${response.status}: ${response.statusText}`;
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.detail || errorData.message || errorMessage;
+      } catch (e) {
+        // Si no hay JSON de error, nos quedamos con el texto por defecto
+      }
+      throw new Error(errorMessage);
+    }
+
+    // Manejo de respuestas vacías (204 No Content)
+    if (response.status === 204) {
+      return true; 
+    }
+    
+    return await response.json();
+
+  } catch (error) {
+    console.error("[API Error]", error);
+    throw error; // Re-lanzar para que el componente UI lo maneje
+  }
 }
 
 export default fetchApi;
