@@ -1,8 +1,9 @@
 // src/components/Layout/Navbar.jsx
 
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext'; // Ajustar ruta si es necesario
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
+import logoAoriix from '../../assets/logo-aoriix-color.svg';
 
 function Navbar() {
   const { user, logout } = useAuth();
@@ -20,35 +21,51 @@ function Navbar() {
   ];
 
   return (
-    <header className="bg-blue-800 text-white shadow-lg sticky top-0 z-10">
+    <header className="bg-gradient-to-r from-blue-700 to-blue-900 text-white shadow-lg sticky top-0 z-10">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
         
-        {/* Logo/Título */}
-        <Link to="/dashboard" className="text-xl font-bold tracking-wider hover:text-gray-200">
-          PYMESec
+        {/* Logo + Título */}
+        <Link to="/dashboard" className="flex items-center gap-2 group">
+          <img
+            src={logoAoriix}
+            alt="AORIIX / PYMESec"
+            className="h-9 w-auto"
+          />
+          <span className="text-lg font-semibold tracking-wide text-white group-hover:text-gray-100">
+            PYMESec
+          </span>
         </Link>
 
         {/* Enlaces de Navegación */}
-        <nav className="hidden md:flex space-x-4">
+        <nav className="hidden md:flex space-x-2">
           {navLinks.map((link) => (
-            <Link 
-              key={link.name} 
-              to={link.path} 
-              className="text-gray-300 hover:bg-blue-700 hover:text-white px-3 py-2 rounded-md text-sm font-medium"
+            <NavLink
+              key={link.name}
+              to={link.path}
+              className={({ isActive }) =>
+                `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-white/15 text-white'
+                    : 'text-blue-100 hover:bg-blue-800 hover:text-white'
+                }`
+              }
             >
               {link.name}
-            </Link>
+            </NavLink>
           ))}
         </nav>
 
         {/* Perfil y Logout */}
         <div className="flex items-center space-x-4">
-          <Link to="/profile" className="text-sm font-medium hover:underline">
+          <Link
+            to="/profile"
+            className="text-sm font-medium text-blue-100 hover:text-white"
+          >
             Hola, {user ? user.name.split(' ')[0] : 'Usuario'}
           </Link>
           <button
             onClick={handleLogout}
-            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm font-medium transition duration-150"
+            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md text-sm font-medium transition-colors"
           >
             Salir
           </button>

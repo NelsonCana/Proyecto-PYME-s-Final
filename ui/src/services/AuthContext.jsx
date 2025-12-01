@@ -14,21 +14,16 @@ export const AuthProvider = ({ children }) => {
 
   const isLoggedIn = !!token;
 
-  // ===============================================
   // 1. REGISTRO
-  // ===============================================
   const register = async (formData) => {
     return authService.register(formData);
   };
 
-  // ===============================================
   // 2. LOGIN
-  // ===============================================
   const login = async (email, password) => {
     try {
-      console.log('AuthContext.login →', { email, password });
+      console.log("AuthContext.login →", { email, password });
 
-      // ⬇️ AQUÍ LLAMAMOS A authService.login(email, password)
       const data = await authService.login(email, password);
 
       if (data.token && data.user) {
@@ -36,26 +31,21 @@ export const AuthProvider = ({ children }) => {
         setUser(data.user);
         return true;
       }
-
-      throw new Error('Respuesta de login incompleta.');
+      throw new Error("Respuesta de login incompleta.");
     } catch (error) {
-      console.error('Error en login:', error);
+      console.error("Error en login:", error);
       throw error;
     }
   };
 
-  // ===============================================
   // 3. LOGOUT
-  // ===============================================
   const logout = () => {
-    authService.logout(); // limpia token y user del localStorage
+    authService.logout();
     setToken(null);
     setUser(null);
   };
 
-  // ===============================================
-  // 4. VERIFICAR TOKEN AL INICIO
-  // ===============================================
+  // 4. VERIFICAR TOKEN AL CARGAR
   useEffect(() => {
     const checkAuthStatus = async () => {
       if (token) {
@@ -63,7 +53,7 @@ export const AuthProvider = ({ children }) => {
           const profile = await authService.getProfile();
           setUser(profile);
         } catch (error) {
-          console.error('Token de sesión inválido, cerrando sesión.', error);
+          console.error("Token inválido, cerrando sesión.", error);
           logout();
         }
       }
@@ -75,9 +65,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, [token, loading]);
 
-  // ===============================================
-  // 5. PANTALLA DE CARGA INICIAL
-  // ===============================================
+  // 5. Mientras carga autenticación
   if (loading) {
     return (
       <div
@@ -94,15 +82,12 @@ export const AuthProvider = ({ children }) => {
     );
   }
 
-  // ===============================================
-  // 6. PROVEER CONTEXTO
-  // ===============================================
+  // 6. Proveer contexto
   return (
     <AuthContext.Provider
       value={{
         isLoggedIn,
         user,
-        token,
         login,
         logout,
         register,
@@ -114,5 +99,4 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// Hook para usar el contexto
 export const useAuth = () => useContext(AuthContext);

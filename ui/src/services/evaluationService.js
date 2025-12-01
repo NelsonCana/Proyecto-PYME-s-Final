@@ -1,38 +1,26 @@
 // src/services/evaluationService.js
 
-import fetchApi from './apiClient';
+import apiClient from './apiClient';
 
 const evaluationService = {
-  
-  /**
-   * Inicia un nuevo escaneo de seguridad.
-   * @param {object} scanParams - Parámetros de la evaluación (rangos de IP, tipos de prueba, etc.)
-   */
-  startScan: async (scanParams) => {
-    // POST /api/evaluation/start
-    return fetchApi('/evaluation/start', {
-      method: 'POST',
-      body: JSON.stringify(scanParams),
-    });
+  // Función para iniciar un escaneo
+  startEvaluation: async (params) => {
+    const response = await apiClient.post('/evaluation/start', params);
+    return response.data;
   },
 
-  /**
-   * Obtiene el estado actual de una evaluación en curso o la última.
-   * @param {string} [scanId] - ID de la evaluación.
-   */
-  getStatus: async (scanId) => {
-    const endpoint = scanId ? `/evaluation/status/${scanId}` : '/evaluation/status/latest';
-    // GET /api/evaluation/status/{id}
-    return fetchApi(endpoint); 
-  },
-  
-  /**
-   * Obtiene el historial de evaluaciones de la PYME.
-   */
+  // Función para obtener la lista del historial
   getHistory: async () => {
-    // GET /api/evaluation/history
-    return fetchApi('/evaluation/history');
-  }
+    const response = await apiClient.get('/evaluation/history');
+    return response.data;
+  },
+
+  // Pide los detalles de un escaneo específico por su ID
+  getScanById: async (id) => {
+    const response = await apiClient.get(`/scan/${id}`);
+    return response.data;
+  },
 };
 
 export default evaluationService;
+

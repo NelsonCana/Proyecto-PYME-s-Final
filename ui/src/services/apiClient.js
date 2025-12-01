@@ -1,62 +1,46 @@
 // src/services/apiClient.js
+import axios from 'axios';
 
-// ⚠️ IMPORTANTE: Cambia 'localhost' por tu IP pública si accedes desde otro PC
-// En producción esto debería ser una variable de entorno.
+// 1. Detectar URL automáticamente (local vs servidor)
+const API_URL =
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    ? 'http://66.179.189.74:50001/api/v1'   // desarrollo apuntando a tu backend
+    : '/api/v1';                            // producción detrás de Nginx
 
-const API_HOST = '190.97.169.237'; // Tu IP actual
-const API_PORT = '50000';           // 50001 originalmente pero 50000 para pruebas  Puerto expuesto en docker-compose
-const API_VERSION = '/api/v1';     // Nueva ruta definida en api.py
-const API_BASE_URL = `http://${API_HOST}:${API_PORT}${API_VERSION}`;
-
-console.log(`[ApiClient] Conectando a: ${API_BASE_URL}`);
-
-/**
- * Función genérica para llamar a la API.
- * Maneja tokens JWT y errores automáticamente.
- */
-async function fetchApi(endpoint, options = {}) {
-  const token = localStorage.getItem('authToken');
-  
-  const headers = {
+// 2. Crear instancia de Axios
+const apiClient = axios.create({
+  baseURL: API_URL,
+  headers: {
     'Content-Type': 'application/json',
-    ...options.headers,
-  };
+  },
+  timeout: 15000,
+});
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`; 
-  }
+// 3. Interceptor de REQUEST: agregar Authorization si existe token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token'); // el que guardas en login
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
 
-  // Aseguramos que el endpoint empiece con / si no lo tiene
-  const safeEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  
-  try {
-    const response = await fetch(`${API_BASE_URL}${safeEndpoint}`, {
-      ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      let errorMessage = `Error ${response.status}: ${response.statusText}`;
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.detail || errorData.message || errorMessage;
-      } catch (e) {
-        // Si no hay JSON de error, nos quedamos con el texto por defecto
+// 4. Interceptor de RESPONSE: si 401, limpiar y mandar a login
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
       }
-      throw new Error(errorMessage);
     }
-
-    // Manejo de respuestas vacías (204 No Content)
-    if (response.status === 204) {
-      return true; 
-    }
-    
-    return await response.json();
-
-  } catch (error) {
-    console.error("[API Error]", error);
-    throw error; // Re-lanzar para que el componente UI lo maneje
+    return Promise.reject(error);
   }
-}
+);
 
-export default fetchApi;
+export default apiClient;

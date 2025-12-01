@@ -1,52 +1,74 @@
 // src/services/authService.js
 
-import fetchApi from './apiClient';
-
-// Asumimos que su backend de Python tiene los endpoints:
-// POST /api/auth/register
-// POST /api/auth/login
+import apiClient from './apiClient';
 
 const authService = {
-  
-  /**
-   * Realiza la llamada de registro.
-   * @param {object} userData - Datos de usuario (email, password, companyName, etc.)
-   */
-  register: async (userData) => {
-    // Su backend debería manejar la lógica de registro y devolver un mensaje de éxito.
-    return fetchApi('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(userData),
-    });
-  },
-
-  /**
-   * Realiza la llamada de login y almacena el token.
-   * @param {string} email - Email del usuario
-   * @param {string} password - Contraseña
-   * @returns {object} { token: string, user: object }
-   */
+  // ===============================================
+  // LOGIN
+  // ===============================================
+  // Recibe email y password por separado
   login: async (email, password) => {
-    const data = await fetchApi('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
-    
-    // Su backend debe devolver un token (ej. data.access_token)
+    console.log("authService.login →", { email, password });
+
+    const payload = { email, password };
+
+    const response = await apiClient.post('/auth/login', payload);
+    const data = response.data;
+
+    // Si el backend devuelve { token, user }
     if (data.token) {
+      // Guardamos en ambas claves por compatibilidad
+      localStorage.setItem('token', data.token);
       localStorage.setItem('authToken', data.token);
     }
-    
-    return data; // Contiene el token y los datos del usuario.
+
+    if (data.user) {
+      localStorage.setItem('user', JSON.stringify(data.user));
+    }
+
+    return data;
   },
-  
-  /**
-   * Obtiene la información del usuario actual (útil para validar el token).
-   */
+
+  // ===============================================
+  // REGISTRO
+  // ===============================================
+  register: async (userData) => {
+    const payload = {
+      email: userData.email,
+      password: userData.password,
+      name: userData.name,
+      companyName: userData.companyName || userData.company_name,
+    };
+
+    const response = await apiClient.post('/auth/register', payload);
+    return response.data;
+  },
+
+  // ===============================================
+  // PERFIL DEL USUARIO LOGUEADO
+  // (usa /api/v1/user/me en el backend)
+  // ===============================================
   getProfile: async () => {
-    // Endpoint protegido que devuelve los datos del usuario logueado.
-    return fetchApi('/user/me'); 
-  }
+    const response = await apiClient.get('/user/me');
+    return response.data;
+  },
+
+  // ===============================================
+  // LOGOUT
+  // ===============================================
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('user');
+  },
+
+  // ===============================================
+  // OBTENER USUARIO DESDE localStorage
+  // ===============================================
+  getCurrentUser: () => {
+    const userStr = localStorage.getItem('user');
+    return userStr ? JSON.parse(userStr) : null;
+  },
 };
 
 export default authService;

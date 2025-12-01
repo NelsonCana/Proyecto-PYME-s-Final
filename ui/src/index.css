@@ -1,29 +1,81 @@
-@tailwind base;
+@tailwind base; 
 @tailwind components;
 @tailwind utilities;
 
-/* Custom monospace console look */
+/* Colores base claros */
 :root{
-  --bg-1: #071021;
-  --bg-2: #071827;
-  --panel: #0b1220;
-  --muted: #9aa4b2;
-  --accent: #06b6d4;
+  --bg-1: #eef2ff;   /* violeta muy claro */
+  --bg-2: #ffffff;   /* blanco */
+  --panel: #ffffff;
+  --muted: #6b7280;  /* gris 600 */
+  --accent: #2563eb; /* azul */
 }
+
 html,body,#root{height:100%}
+
 body{
-  @apply bg-gradient-to-b from-[#071021] to-[#071827] text-[#e6eef6] font-mono;
+  /* Fondo CLARO y texto oscuro */
+  @apply bg-gradient-to-b from-[#eef2ff] to-[#ffffff] text-gray-900 font-mono;
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
   padding:1rem;
 }
-.container{max-width:1100px;margin:0 auto}
-.ascii-border{border:2px solid rgba(255,255,255,0.06);padding:12px;border-radius:8px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01))}
-.small{font-size:.95rem;color:var(--muted)}
-.status-red{color:#ef4444}
+
+/* Texto oscuro en campos de formulario (inputs blancos) */
+input,
+select,
+textarea {
+  color: #111827; /* gray-900 */
+}
+
+.container{
+  max-width:1100px;
+  margin:0 auto;
+}
+
+/* Panel tipo “tarjeta” */
+.ascii-border{
+  border:2px solid rgba(15,23,42,0.06);
+  padding:12px;
+  border-radius:8px;
+  background:linear-gradient(
+    180deg,
+    rgba(255,255,255,0.9),
+    rgba(249,250,251,0.95)
+  );
+}
+
+.small{
+  font-size:.95rem;
+  color:var(--muted);
+}
+
+.status-red{color:#dc2626}
 .status-yellow{color:#f59e0b}
-.status-green{color:#10b981}
-.console-table th{color:var(--muted);font-weight:600;text-align:left;padding:8px}
-.console-table td{padding:8px;border-top:1px solid rgba(255,255,255,0.02)}
-.btn{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:6px 10px;border-radius:6px}
-.btn-primary{background:linear-gradient(90deg,#06b6d4,#3b82f6);color:#fff;border:0}
+.status-green{color:#16a34a}
+
+.console-table th{
+  color:var(--muted);
+  font-weight:600;
+  text-align:left;
+  padding:8px;
+}
+
+.console-table td{
+  padding:8px;
+  border-top:1px solid rgba(15,23,42,0.06);
+}
+
+.btn{
+  background:transparent;
+  border:1px solid rgba(15,23,42,0.12);
+  padding:6px 10px;
+  border-radius:6px;
+  color:#1f2933;
+}
+
+.btn-primary{
+  background:linear-gradient(90deg,#2563eb,#4f46e5);
+  color:#fff;
+  border:0;
+}

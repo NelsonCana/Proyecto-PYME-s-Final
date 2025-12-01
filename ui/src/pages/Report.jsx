@@ -1,49 +1,37 @@
-import React, { useState, useEffect } from 'react';
+// src/pages/Report.jsx
+
+import React, { useEffect, useState } from 'react'; 
 import { useParams } from 'react-router-dom';
-import reportService from '../services/reportService';
-import { Doughnut } from 'react-chartjs-2';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import evaluationService from '../services/evaluationService';
+import reportService from '../services/reportService'; // ⬅️ nuevo import
 
-ChartJS.register(ArcElement, Tooltip, Legend);
-
-const VulnerabilityDetailModal = ({ vulnerability, onClose }) => {
-    if (!vulnerability) return null;
-    return (
-        <div className="fixed inset-0 bg-gray-900 bg-opacity-90 flex items-center justify-center z-50 p-4">
-            <div className="bg-[#0b1220] border border-gray-700 rounded-lg shadow-2xl max-w-2xl w-full p-6 text-gray-300">
-                <h3 className="text-xl font-bold text-white mb-2">{vulnerability.name}</h3>
-                <p className="mb-4 text-gray-400">{vulnerability.description}</p>
-                <div className="bg-gray-800 p-4 rounded mb-4">
-                    <h4 className="font-semibold text-blue-400 mb-2">Mitigación:</h4>
-                    <ul className="list-disc list-inside">
-                        {(vulnerability.mitigation_steps || []).map((step, i) => (
-                            <li key={i}>{step}</li>
-                        ))}
-                    </ul>
-                </div>
-                <button onClick={onClose} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">
-                    Cerrar
-                </button>
-            </div>
-        </div>
-    );
-};
-
-function Report() {
+const Report = () => {
   const { id } = useParams();
-  const [reportData, setReportData] = useState(null);
+  const [scan, setScan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedVuln, setSelectedVuln] = useState(null);
+  const [stats, setStats] = useState({ critical: 0, high: 0, medium: 0, low: 0, score: 0 });
 
   useEffect(() => {
     const fetchReport = async () => {
       try {
-        const data = await reportService.getReportDetail(id);
-        setReportData(data);
+        console.log("Cargando reporte ID:", id); // Log para depurar
+        if (!id) throw new Error("ID de reporte no válido");
+
+        const data = await evaluationService.getScanById(id);
+        console.log("Datos recibidos:", data); // Log para ver qué llega
+
+        if (!data) throw new Error("El backend devolvió datos vacíos");
+        
+        setScan(data);
+        
+        // Cálculo seguro de estadísticas
+        const vulns = data.results?.vulnerabilities || [];
+        calculateStats(vulns);
+
       } catch (err) {
-        console.error(err);
-        setError("No se pudo cargar el reporte.");
+        console.error("Error crítico cargando reporte:", err);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
@@ -51,124 +39,126 @@ function Report() {
     fetchReport();
   }, [id]);
 
-  // Función para descargar
+  const calculateStats = (vulns) => {
+    try {
+      let c = 0, h = 0, m = 0, l = 0;
+      vulns.forEach(v => {
+        const severity = (v.severity || '').toUpperCase();
+        if (severity.includes('CRITIC')) c++;
+        else if (severity.includes('ALT') || severity.includes('HIGH')) h++;
+        else if (severity.includes('MED')) m++;
+        else l++;
+      });
+      
+      let rawScore = (c * 4) + (h * 2) + (m * 0.5) + (l * 0.1);
+      let finalScore = Math.min(rawScore, 10).toFixed(1);
+      setStats({ critical: c, high: h, medium: m, low: l, score: finalScore });
+    } catch (e) {
+      console.error("Error calculando stats:", e);
+    }
+  };
+
+  // ⚡ Botón de descarga de PDF
   const handleDownload = () => {
-    reportService.downloadReport(id, 'pdf');
+    if (!scan?.id) {
+      console.error('No hay ID de reporte para descargar');
+      return;
+    }
+    // reportService.downloadReport se encarga de llamar al backend y disparar la descarga
+    reportService.downloadReport(scan.id);
   };
 
-  if (loading) return <div className="p-10 text-center text-white">Cargando análisis...</div>;
-  if (error) return <div className="p-10 text-center text-red-400">{error}</div>;
-  if (!reportData) return <div className="p-10 text-center text-gray-400">Reporte no encontrado.</div>;
+  // --- RENDERIZADO SEGURO ---
+  if (error) {
+    return (
+      <div className="p-10 text-center">
+        <h2 className="text-red-500 text-2xl font-bold mb-4">Error cargando el reporte</h2>
+        <p className="text-white bg-red-900/50 p-4 rounded border border-red-500 font-mono inline-block">
+          {error}
+        </p>
+      </div>
+    );
+  }
 
-  const vulns = reportData.vulnerabilities || [];
-  const counts = { Critica: 0, Alta: 0, Media: 0, Baja: 0 };
-  
-  vulns.forEach(v => {
-    if (counts[v.severity] !== undefined) counts[v.severity]++;
-  });
+  if (loading) {
+    return <div className="text-white text-center mt-20 text-xl animate-pulse">Cargando datos del reporte...</div>;
+  }
 
-  const chartData = {
-    labels: ['Critica', 'Alta', 'Media', 'Baja'],
-    datasets: [{
-      data: [counts.Critica, counts.Alta, counts.Media, counts.Baja],
-      backgroundColor: ['#ef4444', '#f97316', '#facc15', '#10b981'],
-      borderWidth: 0
-    }]
-  };
+  if (!scan) {
+    return <div className="text-white text-center mt-20 text-xl">Reporte no encontrado (ID: {id})</div>;
+  }
 
-  const riskScore = Math.min(10, (counts.Critica * 3 + counts.Alta * 2 + counts.Media * 0.5)).toFixed(1);
-
+  // Si llegamos aquí, tenemos datos. Renderizamos con cuidado.
   return (
-    <div className="p-6 max-w-7xl mx-auto text-gray-200">
-      {/* ENCABEZADO CON BOTÓN */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 border-b border-gray-700 pb-4 gap-4">
+    <div className="p-6 max-w-7xl mx-auto space-y-6 text-white">
+      
+      {/* CABECERA */}
+      <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-white">Reporte de Seguridad #{reportData.reportId}</h1>
-          <p className="text-gray-400 mt-1">Objetivo: <span className="text-blue-400 font-mono">{reportData.host}</span></p>
+          <h1 className="text-3xl font-bold">Reporte #{scan.id}</h1>
+          <p className="text-gray-400">Objetivo: {scan.host}</p>
         </div>
-        
+
         <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-500">Fecha: {new Date(reportData.date).toLocaleDateString()}</span>
-            
-            {/* --- AQUÍ ESTÁ EL BOTÓN NUEVO --- */}
-            <button 
-                onClick={handleDownload}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded flex items-center gap-2 transition-colors"
-            >
-                <span>📄 Descargar PDF</span>
-            </button>
+          {/* Botón de descarga */}
+          <button
+            onClick={handleDownload}
+            className="px-4 py-2 text-sm bg-green-600 hover:bg-green-700 text-white font-semibold rounded-md transition-colors"
+          >
+            Descargar reporte (PDF)
+          </button>
+
+          {/* Score */}
+          <div className="text-4xl font-bold text-blue-400">
+            {stats.score}/10
+          </div>
         </div>
       </div>
 
-      {/* PANELES (Igual que antes) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-[#0b1220] p-6 rounded-lg border border-gray-800 flex flex-col items-center justify-center">
-            <h2 className="text-gray-400 text-sm uppercase tracking-wider mb-2">Puntuación de Riesgo</h2>
-            <div className="text-5xl font-bold text-white mb-2">{riskScore}/10</div>
-            <span className={`px-3 py-1 rounded-full text-xs font-bold ${riskScore > 5 ? 'bg-red-900 text-red-200' : 'bg-green-900 text-green-200'}`}>
-                {riskScore > 5 ? 'RIESGO ALTO' : 'RIESGO BAJO'}
-            </span>
+      {/* ANÁLISIS IA (Si existe) */}
+      {scan.results?.ai_summary && (
+        <div className="bg-indigo-900/30 border border-indigo-500 p-6 rounded-lg">
+          <h3 className="text-indigo-300 font-bold mb-2">🤖 Análisis IA</h3>
+          <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">
+            {scan.results.ai_summary}
+          </p>
         </div>
+      )}
 
-        <div className="bg-[#0b1220] p-6 rounded-lg border border-gray-800 flex flex-col items-center">
-            <h2 className="text-gray-400 text-sm uppercase tracking-wider mb-4">Distribución</h2>
-            <div className="w-48 h-48">
-                {vulns.length > 0 ? (
-                    <Doughnut data={chartData} options={{ maintainAspectRatio: false, plugins: { legend: { display: false } } }} />
-                ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500 text-sm">Sin vulnerabilidades</div>
-                )}
-            </div>
-        </div>
-
-        <div className="bg-[#0b1220] p-6 rounded-lg border border-gray-800">
-            <h2 className="text-gray-400 text-sm uppercase tracking-wider mb-4">Resumen de Hallazgos</h2>
-            <div className="space-y-3">
-                <div className="flex justify-between"><span className="text-red-400">Críticas</span> <span>{counts.Critica}</span></div>
-                <div className="flex justify-between"><span className="text-orange-400">Altas</span> <span>{counts.Alta}</span></div>
-                <div className="flex justify-between"><span className="text-yellow-400">Medias</span> <span>{counts.Media}</span></div>
-                <div className="flex justify-between"><span className="text-green-400">Bajas</span> <span>{counts.Baja}</span></div>
-            </div>
-        </div>
-      </div>
-
-      {/* TABLA (Igual que antes) */}
-      <div className="bg-[#0b1220] rounded-lg border border-gray-800 overflow-hidden">
-        <div className="p-4 bg-gray-900 border-b border-gray-800">
-            <h3 className="font-bold text-white">Detalle Técnico</h3>
+      {/* LISTA DE VULNERABILIDADES */}
+      <div className="bg-gray-900 rounded-lg border border-gray-700 overflow-hidden">
+        <div className="px-6 py-4 bg-gray-800 border-b border-gray-700">
+          <h3 className="font-bold">
+            Hallazgos Técnicos ({scan.results?.vulnerabilities?.length || 0})
+          </h3>
         </div>
         <table className="w-full text-left">
-            <thead className="bg-gray-800 text-gray-400 text-sm">
-                <tr>
-                    <th className="p-4">Severidad</th>
-                    <th className="p-4">Hallazgo</th>
-                    <th className="p-4">Acción</th>
-                </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-800">
-                {vulns.length === 0 ? (
-                    <tr><td colSpan="3" className="p-8 text-center text-gray-500">¡Excelente! No se encontraron vulnerabilidades obvias.</td></tr>
-                ) : (
-                    vulns.map((v, idx) => (
-                        <tr key={idx} className="hover:bg-gray-800/50 transition">
-                            <td className="p-4">
-                                <span className={`inline-block w-3 h-3 rounded-full ${v.severity === 'Critica' ? 'bg-red-500' : v.severity === 'Alta' ? 'bg-orange-500' : 'bg-yellow-500'}`}></span>
-                                <span className="ml-2 text-sm">{v.severity}</span>
-                            </td>
-                            <td className="p-4 font-medium text-white">{v.name}</td>
-                            <td className="p-4">
-                                <button onClick={() => setSelectedVuln(v)} className="text-blue-400 hover:underline text-sm">Ver Detalle</button>
-                            </td>
-                        </tr>
-                    ))
-                )}
-            </tbody>
+          <thead className="bg-gray-800 text-xs uppercase text-gray-400">
+            <tr>
+              <th className="px-6 py-3">Severidad</th>
+              <th className="px-6 py-3">Nombre</th>
+              <th className="px-6 py-3">Descripción</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-800">
+            {(scan.results?.vulnerabilities || []).map((v, i) => (
+              <tr key={i} className="hover:bg-gray-800/50">
+                <td className="px-6 py-4 text-sm font-bold text-yellow-400">
+                  {v.severity || 'INFO'}
+                </td>
+                <td className="px-6 py-4 font-medium">
+                  {v.name || 'Sin nombre'}
+                </td>
+                <td className="px-6 py-4 text-sm text-gray-400">
+                  {v.description ? v.description.substring(0, 100) + '...' : 'Sin descripción'}
+                </td>
+              </tr>
+            ))}
+          </tbody>
         </table>
       </div>
-
-      <VulnerabilityDetailModal vulnerability={selectedVuln} onClose={() => setSelectedVuln(null)} />
     </div>
   );
-}
+};
 
 export default Report;

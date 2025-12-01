@@ -16,7 +16,7 @@ import PublicLayout from './components/Layout/PublicLayout'; // Layout Público 
 import PrivateRoute from './components/Auth/PrivateRoute'; 
 
 // 4. Vistas Públicas
-import LandingPage from './pages/LandingPage'; // <-- NUEVO LOBBY
+import LandingPage from './pages/LandingPage'; // Lobby
 import Login from './pages/Login'; 
 import Register from './pages/Register';
 import NotFound from './pages/NotFound'; 
@@ -32,43 +32,54 @@ function App() {
     <ToastProvider>
       <AuthProvider>
         <SocketProvider>
-        <BrowserRouter>
-          <Routes>
-            
-            {/* ======================================================= */}
-            {/* I. RUTAS PÚBLICAS (Lobby, Login, Register) */}
-            {/* ======================================================= */}
-            {/* Todas usan el PublicLayout (Navbar con Ingresar/Registrar) */}
-            <Route element={<PublicLayout />}>
-              <Route path="/" element={<LandingPage />} /> {/* <-- Raíz ahora es el Lobby */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
-            </Route>
-            
-            {/* ======================================================= */}
-            {/* II. RUTAS PROTEGIDAS (La App) */}
-            {/* ======================================================= */}
-            {/* Requieren login (PrivateRoute) y usan el MainLayout (Navbar de Dashboard) */}
-            <Route element={<PrivateRoute />}>
-              <Route element={<MainLayout />}> 
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/objectives" element={<Objectives />} />
-                <Route path="/report" element={<Report />} />
-                <Route path="/report/:id" element={<Report />} /> {/* Para reportes específicos */}
-                <Route path="/profile" element={<Profile />} />
-                
-                {/* Redirección por si un logueado intenta ir a la raíz */}
-                <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <BrowserRouter>
+            <Routes>
+              
+              {/* ======================================================= */}
+              {/* I. RUTAS PÚBLICAS (Lobby, Login, Register) */}
+              {/* ======================================================= */}
+              <Route element={<PublicLayout />}>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/register" element={<Register />} />
               </Route>
-            </Route>
-            
-            {/* ======================================================= */}
-            {/* III. RUTA 404 */}
-            {/* ======================================================= */}
-            <Route path="*" element={<NotFound />} /> 
-            
-          </Routes>
-        </BrowserRouter>
+              
+              {/* ======================================================= */}
+              {/* II. RUTAS PROTEGIDAS (La App) */}
+              {/* ======================================================= */}
+              <Route element={<PrivateRoute />}>
+                <Route element={<MainLayout />}> 
+                  {/* Dashboard principal */}
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  
+                  {/* Objetivos / Configuración */}
+                  <Route path="/objectives" element={<Objectives />} />
+
+                  {/* ✅ Página de "Reportes" (lista / historial) */}
+                  {/* Usamos el mismo Dashboard porque ahí ya tienes el historial */}
+                  <Route path="/reportes" element={<Dashboard />} />
+
+                  {/* ✅ Detalle de un reporte específico */}
+                  <Route path="/report/:id" element={<Report />} />
+
+                  {/* (Opcional) si quieres que /report sin id vaya a /reportes */}
+                  <Route path="/report" element={<Navigate to="/reportes" replace />} />
+
+                  {/* Perfil del usuario */}
+                  <Route path="/profile" element={<Profile />} />
+                  
+                  {/* Si un logueado va a "/", mandarlo al dashboard */}
+                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                </Route>
+              </Route>
+              
+              {/* ======================================================= */}
+              {/* III. RUTA 404 */}
+              {/* ======================================================= */}
+              <Route path="*" element={<NotFound />} /> 
+              
+            </Routes>
+          </BrowserRouter>
         </SocketProvider>
       </AuthProvider>
     </ToastProvider>

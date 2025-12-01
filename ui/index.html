@@ -4,9 +4,31 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PYMESec</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+  <div id="root"></div>
+
+  <!-- Polyfill para crypto.randomUUID en HTTP/IP -->
+  <script>
+    (function () {
+      if (typeof window.crypto === 'undefined') {
+        window.crypto = {};
+      }
+      if (typeof window.crypto.randomUUID !== 'function') {
+        window.crypto.randomUUID = function () {
+          // UUID v4 sencillo
+          return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = (Math.random() * 16) | 0;
+            const v = c === 'x' ? r : (r & 0x3) | 0x8;
+            return v.toString(16);
+          });
+        };
+      }
+    })();
+  </script>
+
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
 </html>
