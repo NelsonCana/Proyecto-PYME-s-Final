@@ -1,10 +1,13 @@
 version: "3.8"
 
 services:
+  
   postgres:
     image: postgres:16
     container_name: pymesec_postgres
     environment:
+      # --- CORRECCIÓN 1 ---
+      # Valores directos para evitar problemas si faltan en .env
       POSTGRES_DB: pymesec
       POSTGRES_USER: pymesec_user
       POSTGRES_PASSWORD: pymesec_pass
@@ -18,13 +21,10 @@ services:
     container_name: pymesec_api
     environment:
       DATABASE_URL: ${DATABASE_URL}
-    # --- CORRECCIÓN IMPORTANTE ---
-    # QUITAMOS 'ports' aquí. La API no necesita estar expuesta al público directamente,
-    # Nginx (ui) hablará con ella internamente usando el nombre 'api' y puerto 8000.
-    # ports:
-    #   - "50001:8000" 
-    expose:
-      - "8000" # Esto solo la hace visible para los otros contenedores (ui), no para internet.
+#    ports:
+#      - "50001:8000"
+
+
     depends_on:
       - postgres
     volumes:
@@ -32,14 +32,13 @@ services:
       - ./config:/app/config:ro
       - ./reports:/app/reports
 
+  # --- CORRECCIÓN 2 ---
+  # 'ui' correctamente indentado dentro de 'services'
   ui:
     build:
       context: ./ui
     container_name: pymesec_ui
     ports:
-      # --- AQUÍ SÍ ---
-      # La UI es la puerta de entrada. Ella recibe el tráfico en el 50001
-      # y si es para la API, Nginx lo deriva internamente.
       - "50001:80"
     depends_on:
       - api

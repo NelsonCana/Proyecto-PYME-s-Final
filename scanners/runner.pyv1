@@ -1,0 +1,92 @@
+import asyncio
+import os
+import json
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("PymeSecRunner")
+
+# Rutas configuradas en Dockerfile
+TOOLS_PATH = "/tools"
+SQLMAP_PATH = os.path.join(TOOLS_PATH, "sqlmap", "sqlmap.py")
+XSSTRIKE_PATH = os.path.join(TOOLS_PATH, "xsstrike", "xsstrike.py")
+DIRSEARCH_PATH = os.path.join(TOOLS_PATH, "dirsearch", "dirsearch.py")
+
+async def run_cmd(cmd_list, timeout=180):
+    """Ejecutor genérico de comandos con timeout"""
+    try:
+        process = await asyncio.create_subprocess_exec(
+            *cmd_list,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        return stdout.decode(errors='ignore'), stderr.decode(errors='ignore')
+    except asyncio.TimeoutError:
+        try: process.kill() 
+        except: pass
+        return "", "Timeout"
+    except Exception as e:
+        return "", str(e)
+
+# --- WRAPPER PARA NUCLEI ---
+async def scan_nuclei(target):
+    # Solo buscamos cosas graves (Critical/High)
+    cmd = ["nuclei", "-u", target, "-json", "-s", "critical,high"]
+    out, err = await run_cmd(cmd, timeout=200)
+    
+    findings = []
+    for line in out.split("\n"):
+        if line:
+            try:
+                data = json.loads(line)
+                findings.append({
+                    "severity": data.get("info", {}).get("severity", "info").upper(),
+                    "name": data.get("info", {}).get("name", "Unknown"),
+                    "description": f"Detectado por Nuclei: {data.get('info', {}).get('description')}",
+                    "mitigation": "Revisar CVE asociado"
+                })
+            except: pass
+    return findings
+
+# --- WRAPPER PARA DIRSEARCH ---
+async def scan_dirsearch(target):
+    temp_file = f"/tmp/dir_{os.urandom(4).hex()}.json"
+    cmd = ["python3", DIRSEARCH_PATH, "-u", target, "--format=json", "-o", temp_file, "-x", "400-599", "--max-time", "60"]
+    
+    await run_cmd(cmd, timeout=70)
+    
+    findings = []
+    if os.path.exists(temp_file):
+        try:
+            with open(temp_file) as f:
+                data = json.load(f)
+                results = data.get("results", [])
+                for res in results:
+                    findings.append({
+                        "severity": "MEDIA",
+                        "name": "Directorio Expuesto",
+                        "description": f"Ruta accesible: {res.get('path')} ({res.get('status')})",
+                        "mitigation": "Proteger ruta si contiene información sensible"
+                    })
+        except: pass
+        os.remove(temp_file)
+    return findings
+
+# --- WRAPPER PARA SQLMAP ---
+async def scan_sqlmap(target):
+    # --smart: Solo escanea si ve parámetros GET/POST
+    # --batch: No pregunta nada
+    cmd = ["python3", SQLMAP_PATH, "-u", target, "--batch", "--smart", "--crawl=1", "--level=1"]
+    out, err = await run_cmd(cmd, timeout=300)
+    
+    findings = []
+    full_text = out + err
+    if "Parameter:" in full_text and "Type:" in full_text:
+        findings.append({
+            "severity": "CRITICA",
+            "name": "SQL Injection",
+            "description": "Base de datos vulnerable. SQLMap pudo inyectar comandos.",
+            "mitigation": "Usar Prepared Statements (Consultas parametrizadas)"
+        })
+    return findings

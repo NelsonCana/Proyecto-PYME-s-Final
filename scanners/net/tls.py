@@ -1,24 +1,34 @@
 import ssl
 import socket
-from datetime import datetime
+import asyncio
 
-def tls_info(host: str, port: int = 443) -> dict:
+async def tls_info(host):
     """
-    Obtiene información del certificado TLS de un host.
+    Obtiene información del certificado SSL/TLS de forma asíncrona.
     """
-    context = ssl.create_default_context()
+    # Ejecutamos la operación bloqueante de sockets en un hilo aparte
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _get_tls_sync, host)
+
+def _get_tls_sync(host):
+    """Función interna síncrona para extraer el certificado"""
     try:
-        with socket.create_connection((host, port), timeout=3.0) as sock:
-            with context.wrap_socket(sock, server_hostname=host) as ssock:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        
+        with socket.create_connection((host, 443), timeout=5) as sock:
+            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert()
-                expiry_date = datetime.strptime(cert['notAfter'], '%b %d %H:%M:%S %Y %Z')
+                if not cert:
+                    return None
                 
+                # Extraemos datos básicos
+                issuer = dict(x[0] for x in cert['issuer'])
                 return {
-                    "host": host,
-                    "issuer": dict(x[0] for x in cert['issuer']),
-                    "subject": dict(x[0] for x in cert['subject']),
-                    "expires": expiry_date.isoformat(),
-                    "error": None
+                    "issuer": issuer.get('organizationName', 'Desconocido'),
+                    "expires": cert.get('notAfter', 'N/A'),
+                    "version": ssock.version()
                 }
-    except Exception as e:
-        return {"host": host, "error": str(e)}
+    except:
+        return None
