@@ -18,6 +18,7 @@ services:
     container_name: pymesec_api
     environment:
       DATABASE_URL: ${DATABASE_URL}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
     # --- CORRECCIÓN IMPORTANTE ---
     # QUITAMOS 'ports' aquí. La API no necesita estar expuesta al público directamente,
     # Nginx (ui) hablará con ella internamente usando el nombre 'api' y puerto 8000.

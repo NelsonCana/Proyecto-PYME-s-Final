@@ -5,14 +5,22 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import Spinner from '../components/UI/Spinner';
+import TermsModal from '../components/Auth/TermsModal'; // <--- IMPORTACIÓN NUEVA
 
 function Register() {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     password: '',
-    companyName: '', // Campo adicional para la PYME
+    confirmPassword: '', // Agregado para que coincida con tu lógica de validación
+    companyName: '',
   });
+  
+  // --- ESTADOS NUEVOS PARA LOS TÉRMINOS ---
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
+  // ----------------------------------------
+
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   
@@ -30,9 +38,18 @@ function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    // ⬇️ VALIDACIÓN DE TÉRMINOS (NUEVO)
+    if (!acceptedTerms) {
+      const msg = 'Debes aceptar los Términos y Condiciones para registrarte.';
+      setError(msg);
+      showToast(msg, 'warning');
+      return;
+    }
+
     setLoading(true);
 
-    // ⬇️ VALIDACIÓN DE FRONTEND para mejor UX
+    // ⬇️ VALIDACIÓN DE FRONTEND
     if (formData.password.length < 8) {
         setError('La contraseña debe tener al menos 8 caracteres.');
         showToast('La contraseña es muy corta. Mínimo 8 caracteres.', 'warning');
@@ -47,8 +64,9 @@ function Register() {
     }
     
     try {
-      // ⬇️ Llama al servicio de registro
-      await register(formData); 
+      // ⬇️ Llama al servicio de registro (excluyendo confirmPassword)
+      const { confirmPassword, ...dataToSend } = formData;
+      await register(dataToSend); 
       
       showToast('Registro exitoso. ¡Ahora puedes iniciar sesión!', 'success');
       navigate('/login'); 
@@ -64,7 +82,10 @@ function Register() {
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
-      <div className="w-full max-w-lg p-8 space-y-6 bg-white rounded-lg shadow-xl">
+      {/* --- MODAL DE TÉRMINOS --- */}
+      <TermsModal isOpen={showTerms} onClose={() => setShowTerms(false)} />
+
+      <div className="w-full max-w-lg p-8 space-y-6 bg-white rounded-lg shadow-xl border border-gray-200">
         <h2 className="text-3xl font-bold text-center text-gray-900">Registro PYMESec</h2>
         <form className="space-y-5" onSubmit={handleSubmit}>
           
@@ -77,7 +98,7 @@ function Register() {
               value={formData.name} 
               onChange={handleChange} 
               required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           
@@ -90,7 +111,7 @@ function Register() {
               value={formData.companyName} 
               onChange={handleChange} 
               required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
 
@@ -103,7 +124,7 @@ function Register() {
               value={formData.email} 
               onChange={handleChange} 
               required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           
@@ -116,7 +137,7 @@ function Register() {
               value={formData.password} 
               onChange={handleChange} 
               required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
           
@@ -126,25 +147,51 @@ function Register() {
             <input 
               type="password" 
               name="confirmPassword"
-              value={formData.confirmPassword || ''} // Asegurarse de que exista en el estado local si es necesario para la validación
+              value={formData.confirmPassword} 
               onChange={handleChange} 
               required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md"
+              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
             />
+          </div>
+
+          {/* --- CHECKBOX DE TÉRMINOS Y CONDICIONES (NUEVO) --- */}
+          <div className="flex items-start gap-2 pt-2">
+            <input
+              id="terms"
+              type="checkbox"
+              checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded cursor-pointer"
+            />
+            <label htmlFor="terms" className="text-sm text-gray-600 select-none">
+              He leído y acepto los{' '}
+              <button
+                type="button"
+                onClick={() => setShowTerms(true)}
+                className="text-blue-600 hover:text-blue-800 underline font-medium focus:outline-none"
+              >
+                Términos y Condiciones
+              </button>
+              {' '}y la Política de Privacidad (ISO 27001).
+            </label>
           </div>
 
           {/* Mostrar Errores */}
           {error && (
-            <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-400 rounded">
-              {error}
+            <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded-md">
+              🚨 {error}
             </div>
           )}
 
-          {/* Botón de Envío con Spinner */}
+          {/* Botón de Envío */}
           <button 
             type="submit" 
-            disabled={loading}
-            className="w-full py-2 flex justify-center items-center bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition duration-150"
+            disabled={loading} // Opcional: || !acceptedTerms para bloquear visualmente
+            className={`w-full py-2 flex justify-center items-center font-medium rounded-md text-white transition duration-150
+              ${loading || !acceptedTerms 
+                ? 'bg-blue-400 cursor-not-allowed' 
+                : 'bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-500/30'
+              }`}
           >
             {loading ? (
               <>

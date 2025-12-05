@@ -1,107 +1,114 @@
 // src/pages/Login.jsx
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../contexts/ToastContext'; // <-- NUEVA IMPORTACIÓN
-import Spinner from '../components/UI/Spinner'; // <-- Importar el Spinner
+import { useToast } from '../contexts/ToastContext';
+import Spinner from '../components/UI/Spinner';
 
 function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   
   const { login } = useAuth();
-  const { showToast } = useToast(); // Hook para notificaciones
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
-
-    // Validación simple en el frontend
-    if (!email || !password) {
-        setError('Por favor, complete ambos campos.');
-        setLoading(false);
-        return;
-    }
-
     try {
-      // ⬇️ Llamada a la función login del AuthContext que usa authService.js
       await login(email, password);
-      
-      showToast('¡Bienvenido! Sesión iniciada con éxito.', 'success'); 
-      navigate('/dashboard', { replace: true }); 
-
+      showToast('¡Bienvenido de nuevo!', 'success');
+      navigate('/dashboard', { replace: true });
     } catch (err) {
-      // El error viene del apiClient o authService (manejo de la respuesta HTTP)
-      const message = err.message || 'Error de conexión. Intente más tarde.';
-      setError(message);
-      showToast(message, 'error'); // Mostrar error como Toast
+      showToast(err.message || 'Error de credenciales', 'error');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-100">
-      <div className="w-full max-w-sm p-8 space-y-6 bg-white rounded-lg shadow-xl">
-        <h2 className="text-3xl font-bold text-center text-gray-900">Acceso PYMESec</h2>
-        <form className="space-y-5" onSubmit={handleSubmit}>
-          
-          {/* Campo Email */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
-            <input 
-              type="email" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          
-          {/* Campo Contraseña */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Contraseña</label>
-            <input 
-              type="password" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              required
-              className="w-full px-3 py-2 mt-1 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-
-          {/* Mostrar Errores Estáticos (Adicional al Toast) */}
-          {error && (
-            <div className="p-3 text-sm text-red-700 bg-red-100 border border-red-400 rounded">
-              {error}
-            </div>
-          )}
-
-          {/* Botón de Envío con Spinner */}
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="w-full py-2 flex justify-center items-center bg-green-600 text-white font-medium rounded-md hover:bg-green-700 disabled:opacity-50 transition duration-150"
-          >
-            {loading ? (
-              <>
-                <Spinner size="sm" color="white" />
-                <span className="ml-2">Validando...</span>
-              </>
-            ) : (
-              'Acceder'
-            )}
-          </button>
-        </form>
-
-        <p className="text-sm text-center text-gray-600">
-          ¿No tienes cuenta? <Link to="/register" className="font-medium text-blue-600 hover:text-blue-500">Regístrate aquí</Link>
+    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+      <div className="sm:mx-auto sm:w-full sm:max-w-md">
+        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+          PYMESec
+        </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Evaluador de Seguridad Inteligente
         </p>
+      </div>
+
+      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        <div className="bg-white py-8 px-4 shadow-xl sm:rounded-lg sm:px-10 border border-gray-100">
+          <form className="space-y-6" onSubmit={handleSubmit}>
+            <div>
+              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                Correo Electrónico
+              </label>
+              <div className="mt-1">
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                Contraseña
+              </label>
+              <div className="mt-1">
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 transition-colors"
+              >
+                {loading ? <Spinner size="sm" color="white" /> : 'Iniciar Sesión'}
+              </button>
+            </div>
+          </form>
+
+          <div className="mt-6">
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300" />
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-gray-500">
+                  ¿No tienes cuenta?
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <Link
+                to="/register"
+                className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-indigo-600 bg-white hover:bg-gray-50 transition-colors"
+              >
+                Registrarse Gratis
+              </Link>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
