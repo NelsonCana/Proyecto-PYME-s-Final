@@ -1,5 +1,5 @@
 # Base ligera de Python
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 # Evitar archivos basura de python
 ENV PYTHONDONTWRITEBYTECODE=1

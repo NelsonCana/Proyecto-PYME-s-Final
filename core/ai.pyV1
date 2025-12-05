@@ -1,0 +1,100 @@
+import os
+import json
+import google.generativeai as genai
+
+# Configuración de la API Key (la toma de las variables de entorno)
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+
+class RiskEngine:
+    """
+    Motor de Riesgo basado en la fórmula ISG (Índice de Seguridad Global)
+    definida en la documentación del proyecto (Pág. 64).
+    """
+    
+    def __init__(self):
+        # Pesos (Wc) según tu tesis
+        self.weights = {
+            "CRITICA": 10.0,
+            "ALTA": 6.0,
+            "MEDIA": 3.0,
+            "BAJA": 1.0,
+            "INFO": 0.1
+        }
+        self.RMAX = 100.0 
+
+    def calculate_isg(self, vulnerabilities):
+        """
+        Calcula el puntaje de 0 a 100.
+        ISG = 100 - [(Suma(Severidad) / Rmax) * 100]
+        """
+        if not vulnerabilities:
+            return 100.0, "RIESGO BAJO"
+
+        total_risk_score = 0.0
+        
+        for vuln in vulnerabilities:
+            severity = vuln.get("severity", "INFO").upper()
+            
+            # Buscamos el peso aproximado
+            weight = 0.1
+            for key, val in self.weights.items():
+                if key in severity:
+                    weight = val
+                    break
+            
+            total_risk_score += weight
+
+        # Fórmula del documento
+        damage_percentage = (total_risk_score / self.RMAX) * 100
+        isg_score = max(0.0, 100.0 - damage_percentage)
+        
+        # Etiquetado
+        label = "RIESGO BAJO"
+        if isg_score < 50: label = "RIESGO CRÍTICO"
+        elif isg_score < 70: label = "RIESGO ALTO"
+        elif isg_score < 90: label = "RIESGO MODERADO"
+
+        return round(isg_score, 1), label
+
+class ExplainEngine:
+    """
+    Motor de NLP para traducción técnica a lenguaje natural.
+    """
+    
+    def generate_summary(self, scan_data):
+        if not GEMINI_API_KEY:
+            return "IA no disponible: Falta configurar GEMINI_API_KEY en el servidor."
+
+        try:
+            model = genai.GenerativeModel('gemini-pro')
+            
+            # Resumimos los datos para no saturar el prompt
+            vulns_summary = [
+                f"- {v.get('severity')}: {v.get('name')}" 
+                for v in scan_data.get("vulnerabilities", [])[:15]
+            ]
+            
+            prompt = f"""
+            Actúa como un Consultor de Ciberseguridad Senior para PYMEs.
+            Analiza estos hallazgos técnicos:
+            {json.dumps(vulns_summary, indent=2)}
+            
+            Objetivo: {scan_data.get('scan_meta', {}).get('host')}
+            
+            Escribe un 'Resumen Ejecutivo' de 1 párrafo (aprox 50 palabras) en español simple.
+            Explica el impacto real en el negocio (ej. pérdida de datos, reputación).
+            NO uses formato Markdown, solo texto plano.
+            """
+            
+            response = model.generate_content(prompt)
+            return response.text.strip()
+            
+        except Exception as e:
+            print(f"Error IA: {e}")
+            return "El módulo de inteligencia artificial no pudo procesar el resumen en este momento."
+
+# Instancias listas para importar
+risk_engine = RiskEngine()
+explain_engine = ExplainEngine()
